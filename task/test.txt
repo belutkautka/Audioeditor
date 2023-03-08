@@ -1,0 +1,138 @@
+#!/bin/bash
+import ffmpeg
+import subprocess
+import os.path
+import os
+from pathlib import Path
+from collections import deque
+
+class History:
+    def __init__(self):
+        self.dir = Path(str(Path.cwd())+"/systemFiles"+"/History")
+        Path.mkdir(self.dir)
+        self.queue=deque()
+    def add(self,name):
+        self.queue.append(name)
+        if len(self.queue)>5:
+            trash=self.queue.popleft()
+
+
+history=History()
+
+def lenght(name):
+    return float(ffmpeg.probe(name)['format']['duration'])
+
+
+def check(name):
+    my_file = Path(name)
+    if not my_file.is_file():
+    # if not os.path.exists(name):
+        print("Фаил " + name + " не найден")
+        exit()
+    #if name[-4:] not in ['.mp3', ".wav"]:
+    if my_file.suffix!='.mp3'and my_file.suffix!=".wav":
+        print('Не поддерживается данное расширение,'
+              ' проверьте правильность названия файла '+name)
+        exit()
+
+
+
+
+
+def trim():
+    print('Напишите название аудиофaйла,'
+          ' который надо образать ( форматы : .mp3, .wav )')
+    name = input()
+    check(name)
+    stream = ffmpeg.input(name)
+    len = lenght(name)
+    print('Укажите начало аудиофрагмента (в секундах)')
+    st = int(input())
+    if st < 0 or st > len:
+        print("Начало вне аудиофрагмента")
+        return
+    print('Укажите конец аудиофрагмента (в секундах)')
+    en = int(input())
+    if en < 0 or en > len:
+        print("Конец вне аудиофрагмента")
+        return
+    stream = stream.filter_('atrim', start=st, end=en)\
+        .filter_('asetpts', 'PTS-STARTPTS')
+    stream = ffmpeg.output(stream, 'new_' + name)
+    ffmpeg.run(stream)
+
+
+
+def concut():
+    print('Напишите название аудиофайлов ( форматы : .mp3, .wav ),'
+          ' который надо образать и потом enter')
+    streams = []
+    while True:
+        name = input()
+        if name == "":
+            break
+        check(name)
+        streams.append(ffmpeg.input(name))
+    stream = ffmpeg.concat(*streams, v=0, a=1)
+    stream = ffmpeg.output(stream, "output.mp3")
+    ffmpeg.run(stream)
+
+
+def change_speed():
+    print('Напишите название аудиофaйла ( форматы : .mp3, .wav ),'
+          ' который надо ускорить или замедрить')
+    name = input()
+    check(name)
+    print('Укажите во сколько раз надо ускорить'
+          ' аудиодорожку (диапазон от 0.5 до 2.0')
+    speed = input()
+    subprocess.Popen(['ffmpeg', "-i", name, "-af",
+                      "atempo=" + speed, speed + '_' + name])
+
+
+def norm():
+    print('Напишите название аудиофaйла ( форматы : .mp3, .wav ),'
+          ' который надо нормализовать')
+    name = input()
+    check(name)
+    subprocess.Popen(['ffmpeg', "-i", name,
+                      "-af", "dynaudnorm", 'norm' + name])
+
+
+dictionary = {1: lambda: trim(),
+              2: lambda: concut(),
+              3: lambda: change_speed(),
+              4: lambda: norm()}
+
+
+def menu():
+    while True:
+        print('Возможные функции:',
+          '0 - выйти',
+          '1 - образать аудио',
+          '2 - склеить несколько аудио',
+          '3 - ускорить или замедлить аудио',
+          '4 - нормализовать аудио', sep='\n')
+        command = input()
+        try:
+            command= int(command)
+        except ValueError:
+            print("Неправильный ввод команды, попробуйте еще раз")
+            continue
+        else:
+            if not command in dictionary.keys():
+                print("Неправильный ввод команды, попробуйте еще раз")
+                continue
+            dictionary[command]()
+            break
+
+
+
+def main():
+    print('Добро пожаловать в аудиоредактор')
+    #history=History()
+    menu()
+
+
+if __name__ == '__main__':
+    main()
